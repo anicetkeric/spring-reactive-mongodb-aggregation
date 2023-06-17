@@ -33,5 +33,4 @@ public class Invoice {
     private Customer customer;
 
     private InvoiceStatusEnum status = InvoiceStatusEnum.PENDING;
-
 }

@@ -25,9 +25,7 @@ public class InvoiceHandler {
         LocalDate dateFrom = serverRequest.queryParam("startDate").map(this::validateInputDate).orElse(null);
         LocalDate dateTo = serverRequest.queryParam("endDate").map(this::validateInputDate).orElse(null);
 
-        if (dateFrom == null || dateTo == null){
-            throw new ValidatorException("The date parameters are not valid, please verify");
-        }
+        datesValidation(dateFrom, dateTo);
 
         return invoiceService.repositoryAggregation(dateFrom, dateTo)
                 .flatMap(invoiceCountSummary ->
@@ -41,9 +39,7 @@ public class InvoiceHandler {
         LocalDate dateFrom = serverRequest.queryParam("startDate").map(this::validateInputDate).orElse(null);
         LocalDate dateTo = serverRequest.queryParam("endDate").map(this::validateInputDate).orElse(null);
 
-        if (dateFrom == null || dateTo == null){
-            throw new ValidatorException("The date parameters are not valid, please verify");
-        }
+        datesValidation(dateFrom, dateTo);
 
         return invoiceService.mongoTemplateAggregation(dateFrom, dateTo)
                 .flatMap(invoiceCountSummary ->
@@ -51,6 +47,11 @@ public class InvoiceHandler {
                                 .bodyValue(invoiceCountSummary));
     }
 
+    private static void datesValidation(LocalDate dateFrom, LocalDate dateTo) {
+        if (dateFrom == null || dateTo == null){
+            throw new ValidatorException("The date parameters are not valid, please verify");
+        }
+    }
 
     private LocalDate validateInputDate(String inputDate){
         try {

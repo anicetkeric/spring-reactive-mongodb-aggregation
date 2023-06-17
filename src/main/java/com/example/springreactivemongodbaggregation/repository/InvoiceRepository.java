@@ -4,10 +4,12 @@ import com.example.springreactivemongodbaggregation.document.Invoice;
 import com.example.springreactivemongodbaggregation.model.InvoiceCountSummary;
 import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 
+@Repository
 public interface InvoiceRepository extends ReactiveMongoRepository<Invoice, String> {
 
     @Aggregation(pipeline = {
