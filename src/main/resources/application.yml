@@ -3,8 +3,8 @@ spring:
     mongodb:
       host: localhost
       port: 27017
-      database: aggregationdb
-      username: aggregationlabuser
+      database: sample_training
+      username: demouser
       password: bk2rFn*d
 
 # Enable Logging mongo queries

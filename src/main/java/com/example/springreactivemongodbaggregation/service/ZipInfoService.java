@@ -1,19 +1,16 @@
 package com.example.springreactivemongodbaggregation.service;
 
 import com.example.springreactivemongodbaggregation.document.ZipInfo;
-import jakarta.annotation.PostConstruct;
+import com.example.springreactivemongodbaggregation.model.ZipInfoStats;
+import com.example.springreactivemongodbaggregation.model.StateCities;
 import lombok.RequiredArgsConstructor;
-import org.bson.Document;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.mongodb.core.BulkOperations;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.aggregation.TypedAggregation;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
-import java.io.BufferedInputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import static org.springframework.data.domain.Sort.Direction.ASC;
+import static org.springframework.data.mongodb.core.aggregation.Aggregation.*;
 
 
 @RequiredArgsConstructor
@@ -23,41 +20,128 @@ public class ZipInfoService {
     private final ReactiveMongoTemplate reactiveMongoTemplate;
 
 
-    @PostConstruct
-    private void insertZipData() {
-        // Fill the collection if it is empty
-        reactiveMongoTemplate.count(new Query(), ZipInfo.class)
-                        .subscribe(countData -> {
-                            if (countData == 0){
-                                List<Document> documents = parseDocuments();
+    /**
+     * Get Largest and Smallest Cities by State
+     * @return Flux of ZipInfoStats
+     */
+    public Flux<ZipInfoStats> getLargestAndSmallestCitiesByState() {
+/*
+        """
+             db.getCollection("zips").aggregate([
+                               {
+                                   $group: {
+                                       _id: {
+                                           state: '$state',
+                                           city: '$city'
+                                       },
+                                       pop: {
+                                           $sum: '$pop'
+                                       }
+                                   }
+                               },
+                               {
+                                   $sort: {
+                                       pop: 1,
+                                       '_id.state': 1,
+                                       '_id.city': 1
+                                   }
+                               },
+                               {
+                                   $group: {
+                                       _id: '$_id.state',
+                                       biggestCity: {
+                                           $last: '$_id.city'
+                                       },
+                                       biggestPop: {
+                                           $last: '$pop'
+                                       },
+                                       smallestCity: {
+                                           $first: '$_id.city'
+                                       },
+                                       smallestPop: {
+                                           $first: '$pop'
+                                       }
+                                   }
+                               },
+                               {
+                                   $project: {
+                                       _id: 0,
+                                       state: '$_id',
+                                       biggestCity: {
+                                           name: '$biggestCity',
+                                           pop: '$biggestPop'
+                                       },
+                                       smallestCity: {
+                                           name: '$smallestCity',
+                                           pop: '$smallestPop'
+                                       }
+                                   }
+                               },
+                               {
+                                   $sort: {
+                                       state: 1
+                                   }
+                               }
+                           
+                           ])
+        """
+        */
 
-                                reactiveMongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, ZipInfo.class).insert(documents).execute().subscribe();
-                            }
-                        });
+
+        TypedAggregation<ZipInfo> aggregation = newAggregation(ZipInfo.class, //
+                group("state", "city").sum("population").as("pop"), //
+                sort(ASC, "pop", "state", "city"), //
+                group("state") //
+                        .last("city").as("biggestCity") //
+                        .last("pop").as("biggestPop") //
+                        .first("city").as("smallestCity") //
+                        .first("pop").as("smallestPop"), //
+                project() //
+                        .and("state").previousOperation() //
+                        .and("biggestCity").nested(bind("name", "biggestCity").and("pop", "biggestPop")) //
+                        .and("smallestCity").nested(bind("name", "smallestCity").and("pop", "smallestPop")), //
+                sort(ASC, "state") //
+        );
+
+        return reactiveMongoTemplate.aggregate(aggregation, ZipInfo.class, ZipInfoStats.class);
+
     }
 
 
-    // https://github.com/spring-projects/spring-data-mongodb/blob/main/spring-data-mongodb/src/test/java/org/springframework/data/mongodb/core/aggregation/AggregationTests.java#L150
-    private List<Document> parseDocuments() {
+    public Flux<StateCities> getCitiesByState() {
+/*
+        """
+                db.getCollection('zips').aggregate(
+                    [
+                        {
+                            $group: {
+                                _id: "$state",
+                                cities: { $push: "$city" },
+                            },
+                        },
 
-        Scanner scanner = null;
-        List<Document> documents = new ArrayList<>(30000);
+                        {
+                            $project: {
+                                _id: 0,
+                                state: "$_id",
+                                cities: "$cities",
+                            },
+                        },
+                        {
+                            $sort: { state: 1 },
+                        },
+                    ]
+                );
+        """*/
+        var groupStage = group("$state").push("$city").as("cities");
+        var projectStage = project().andExclude("_id").and("$_id").as("state").and("$cities").as("cities");
+        var sortingStage = sort(ASC, "state");
 
-        try {
-            scanner = new Scanner(new BufferedInputStream(new ClassPathResource("initdb/zips.json").getInputStream()));
-            while (scanner.hasNextLine()) {
-                String zipInfoRecord = scanner.nextLine();
-                documents.add(Document.parse(zipInfoRecord));
-            }
-        } catch (Exception e) {
-            if (scanner != null) {
-                scanner.close();
-            }
-            throw new RuntimeException("Could not load mongodb sample dataset", e);
-        }
+        var aggregation = newAggregation(groupStage, projectStage, sortingStage);
 
-        return documents;
+        return reactiveMongoTemplate.aggregate(aggregation, ZipInfo.class, StateCities.class);
     }
+
 
 
 
